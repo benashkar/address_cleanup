@@ -738,14 +738,22 @@
         }
 
         async function approve(id) {
-            await fetch(`/api/merges/${id}/approve`, { method: 'POST' });
+            await fetch(`/api/merges/${id}/approve`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({})
+            });
             document.getElementById(`merge-${id}`).remove();
             loadStats();
             loadCategories();
         }
 
         async function reject(id) {
-            await fetch(`/api/merges/${id}/reject`, { method: 'POST' });
+            await fetch(`/api/merges/${id}/reject`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({})
+            });
             document.getElementById(`merge-${id}`).remove();
             loadStats();
             loadCategories();
