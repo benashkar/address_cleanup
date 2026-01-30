@@ -2,27 +2,29 @@
 Address Merge Review Web Application
 
 A simple Flask app to review and approve/deny address merge suggestions.
+Uses PostgreSQL for persistent storage.
 """
 
 import os
 import re
 import csv
-import sqlite3
-from flask import Flask, render_template, request, jsonify, g, send_file
+import psycopg2
+from psycopg2.extras import RealDictCursor
+from flask import Flask, render_template, request, jsonify, g, send_file, Response
 from pathlib import Path
+from io import StringIO
 
 app = Flask(__name__)
 
-DATABASE = os.environ.get('DATABASE_PATH', 'review.db')
+# PostgreSQL connection - use DATABASE_URL for Render, fallback to SQLite-style path for local
+DATABASE_URL = os.environ.get('DATABASE_URL', '')
 MERGES_CSV = os.environ.get('MERGES_CSV', '../reports/high_confidence_merges_20260130_001351.csv')
-ORIGINAL_CSV = os.environ.get('ORIGINAL_CSV', '../../chicago_addresses.csv')
 
 
 def get_db():
     """Get database connection."""
     if 'db' not in g:
-        g.db = sqlite3.connect(DATABASE)
-        g.db.row_factory = sqlite3.Row
+        g.db = psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
     return g.db
 
 
@@ -91,11 +93,12 @@ def classify_merge(source_addr, target_addr):
 def init_db():
     """Initialize the database with merge suggestions."""
     db = get_db()
+    cur = db.cursor()
 
     # Create tables
-    db.execute('''
+    cur.execute('''
         CREATE TABLE IF NOT EXISTS merges (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             source_id TEXT NOT NULL,
             target_id TEXT NOT NULL,
             confidence REAL,
@@ -120,28 +123,9 @@ def init_db():
         )
     ''')
 
-    db.execute('''
-        CREATE TABLE IF NOT EXISTS original_addresses (
-            id TEXT PRIMARY KEY,
-            address TEXT,
-            raw_address TEXT,
-            house_number TEXT,
-            pre_direction TEXT,
-            street_name TEXT,
-            street_type TEXT,
-            unit TEXT,
-            unit_type TEXT,
-            city TEXT,
-            zip TEXT,
-            lat REAL,
-            lon REAL,
-            external_source TEXT
-        )
-    ''')
-
-    db.execute('''
+    cur.execute('''
         CREATE TABLE IF NOT EXISTS review_rules (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             category TEXT,
             subcategory TEXT,
             action TEXT,
@@ -150,11 +134,12 @@ def init_db():
         )
     ''')
 
-    db.execute('CREATE INDEX IF NOT EXISTS idx_merges_status ON merges(status)')
-    db.execute('CREATE INDEX IF NOT EXISTS idx_merges_category ON merges(category)')
-    db.execute('CREATE INDEX IF NOT EXISTS idx_merges_subcategory ON merges(subcategory)')
-    db.execute('CREATE INDEX IF NOT EXISTS idx_merges_source ON merges(source_id)')
-    db.execute('CREATE INDEX IF NOT EXISTS idx_merges_target ON merges(target_id)')
+    # Create indexes if they don't exist
+    cur.execute('CREATE INDEX IF NOT EXISTS idx_merges_status ON merges(status)')
+    cur.execute('CREATE INDEX IF NOT EXISTS idx_merges_category ON merges(category)')
+    cur.execute('CREATE INDEX IF NOT EXISTS idx_merges_subcategory ON merges(subcategory)')
+    cur.execute('CREATE INDEX IF NOT EXISTS idx_merges_source ON merges(source_id)')
+    cur.execute('CREATE INDEX IF NOT EXISTS idx_merges_target ON merges(target_id)')
 
     db.commit()
 
@@ -162,7 +147,9 @@ def init_db():
 def load_merges_if_needed():
     """Load merge suggestions from CSV if not already loaded."""
     db = get_db()
-    count = db.execute('SELECT COUNT(*) FROM merges').fetchone()[0]
+    cur = db.cursor()
+    cur.execute('SELECT COUNT(*) as count FROM merges')
+    count = cur.fetchone()['count']
 
     if count == 0 and os.path.exists(MERGES_CSV):
         print(f"Loading merges from {MERGES_CSV}...")
@@ -197,91 +184,31 @@ def load_merges_if_needed():
                     desc
                 ))
                 if len(batch) >= 1000:
-                    db.executemany('''
+                    cur.executemany('''
                         INSERT INTO merges (source_id, target_id, confidence,
                             source_address, target_address,
                             source_raw, source_original, source_unit, source_unit_type, source_ext_source,
                             target_raw, target_original, target_unit, target_unit_type, target_ext_source,
                             category, subcategory, category_desc)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     ''', batch)
+                    db.commit()
                     batch = []
                     if i % 10000 == 0:
                         print(f"  Loaded {i} records...")
             if batch:
-                db.executemany('''
+                cur.executemany('''
                     INSERT INTO merges (source_id, target_id, confidence,
                         source_address, target_address,
                         source_raw, source_original, source_unit, source_unit_type, source_ext_source,
                         target_raw, target_original, target_unit, target_unit_type, target_ext_source,
                         category, subcategory, category_desc)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ''', batch)
         db.commit()
-        final_count = db.execute('SELECT COUNT(*) FROM merges').fetchone()[0]
+        cur.execute('SELECT COUNT(*) as count FROM merges')
+        final_count = cur.fetchone()['count']
         print(f"Loaded {final_count} merge suggestions")
-
-
-def load_original_sample():
-    """Load a sample of original addresses for comparison."""
-    db = get_db()
-    count = db.execute('SELECT COUNT(*) FROM original_addresses').fetchone()[0]
-
-    if count == 0 and os.path.exists(ORIGINAL_CSV):
-        print(f"Loading original addresses from {ORIGINAL_CSV}...")
-
-        # Get IDs we need
-        merge_ids = db.execute('''
-            SELECT DISTINCT source_id FROM merges
-            UNION
-            SELECT DISTINCT target_id FROM merges
-        ''').fetchall()
-        needed_ids = set(row[0] for row in merge_ids)
-
-        with open(ORIGINAL_CSV, 'r', encoding='utf-8') as f:
-            reader = csv.DictReader(f)
-            batch = []
-            loaded = 0
-            for row in reader:
-                if row['id'] in needed_ids:
-                    batch.append((
-                        row['id'],
-                        row.get('address', ''),
-                        row.get('raw_address', ''),
-                        row.get('house_number', ''),
-                        row.get('pre_direction', ''),
-                        row.get('street_name', ''),
-                        row.get('street_type', ''),
-                        row.get('unit', ''),
-                        row.get('unit_type', ''),
-                        row.get('city', ''),
-                        row.get('zip', ''),
-                        float(row['lat']) if row.get('lat') else None,
-                        float(row['lon']) if row.get('lon') else None,
-                        row.get('external_source', '')
-                    ))
-                    loaded += 1
-                    if len(batch) >= 1000:
-                        db.executemany('''
-                            INSERT OR IGNORE INTO original_addresses
-                            (id, address, raw_address, house_number, pre_direction,
-                             street_name, street_type, unit, unit_type, city, zip,
-                             lat, lon, external_source)
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        ''', batch)
-                        batch = []
-                        if loaded % 10000 == 0:
-                            print(f"  Loaded {loaded} original addresses...")
-            if batch:
-                db.executemany('''
-                    INSERT OR IGNORE INTO original_addresses
-                    (id, address, raw_address, house_number, pre_direction,
-                     street_name, street_type, unit, unit_type, city, zip,
-                     lat, lon, external_source)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ''', batch)
-        db.commit()
-        print(f"Loaded {loaded} original addresses")
 
 
 @app.route('/')
@@ -294,13 +221,12 @@ def index():
 def get_stats():
     """Get review statistics."""
     db = get_db()
+    cur = db.cursor()
     stats = {}
 
     for status in ['pending', 'approved', 'rejected']:
-        count = db.execute(
-            'SELECT COUNT(*) FROM merges WHERE status = ?', (status,)
-        ).fetchone()[0]
-        stats[status] = count
+        cur.execute('SELECT COUNT(*) as count FROM merges WHERE status = %s', (status,))
+        stats[status] = cur.fetchone()['count']
 
     stats['total'] = sum(stats.values())
     return jsonify(stats)
@@ -310,24 +236,26 @@ def get_stats():
 def get_categories():
     """Get all categories with counts."""
     db = get_db()
+    cur = db.cursor()
 
-    categories = db.execute('''
+    cur.execute('''
         SELECT category, subcategory, category_desc, COUNT(*) as count,
                SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending,
                SUM(CASE WHEN status = 'approved' THEN 1 ELSE 0 END) as approved,
                SUM(CASE WHEN status = 'rejected' THEN 1 ELSE 0 END) as rejected
         FROM merges
-        GROUP BY category, subcategory
+        GROUP BY category, subcategory, category_desc
         ORDER BY count DESC
-    ''').fetchall()
+    ''')
 
-    return jsonify([dict(row) for row in categories])
+    return jsonify([dict(row) for row in cur.fetchall()])
 
 
 @app.route('/api/merges')
 def get_merges():
     """Get paginated merge suggestions."""
     db = get_db()
+    cur = db.cursor()
 
     page = int(request.args.get('page', 1))
     per_page = int(request.args.get('per_page', 20))
@@ -338,26 +266,25 @@ def get_merges():
     offset = (page - 1) * per_page
 
     # Build query
-    where_clauses = ['status = ?']
+    where_clauses = ['status = %s']
     params = [status_filter]
 
     if category_filter:
-        where_clauses.append('category = ?')
+        where_clauses.append('category = %s')
         params.append(category_filter)
 
     if subcategory_filter:
-        where_clauses.append('subcategory = ?')
+        where_clauses.append('subcategory = %s')
         params.append(subcategory_filter)
 
     where_sql = ' AND '.join(where_clauses)
 
     # Get total count for pagination
-    total = db.execute(
-        f'SELECT COUNT(*) FROM merges WHERE {where_sql}', params
-    ).fetchone()[0]
+    cur.execute(f'SELECT COUNT(*) as count FROM merges WHERE {where_sql}', params)
+    total = cur.fetchone()['count']
 
     # Get merges (all data is now in the merges table)
-    merges = db.execute(f'''
+    cur.execute(f'''
         SELECT
             id,
             source_id,
@@ -383,11 +310,11 @@ def get_merges():
         FROM merges
         WHERE {where_sql}
         ORDER BY id
-        LIMIT ? OFFSET ?
-    ''', params + [per_page, offset]).fetchall()
+        LIMIT %s OFFSET %s
+    ''', params + [per_page, offset])
 
     return jsonify({
-        'merges': [dict(row) for row in merges],
+        'merges': [dict(row) for row in cur.fetchall()],
         'total': total,
         'page': page,
         'per_page': per_page,
@@ -399,12 +326,13 @@ def get_merges():
 def approve_merge(merge_id):
     """Approve a merge suggestion."""
     db = get_db()
+    cur = db.cursor()
     notes = request.json.get('notes', '') if request.json else ''
 
-    db.execute('''
+    cur.execute('''
         UPDATE merges
-        SET status = 'approved', reviewed_at = CURRENT_TIMESTAMP, reviewer_notes = ?
-        WHERE id = ?
+        SET status = 'approved', reviewed_at = CURRENT_TIMESTAMP, reviewer_notes = %s
+        WHERE id = %s
     ''', (notes, merge_id))
     db.commit()
 
@@ -415,12 +343,13 @@ def approve_merge(merge_id):
 def reject_merge(merge_id):
     """Reject a merge suggestion."""
     db = get_db()
+    cur = db.cursor()
     notes = request.json.get('notes', '') if request.json else ''
 
-    db.execute('''
+    cur.execute('''
         UPDATE merges
-        SET status = 'rejected', reviewed_at = CURRENT_TIMESTAMP, reviewer_notes = ?
-        WHERE id = ?
+        SET status = 'rejected', reviewed_at = CURRENT_TIMESTAMP, reviewer_notes = %s
+        WHERE id = %s
     ''', (notes, merge_id))
     db.commit()
 
@@ -431,6 +360,7 @@ def reject_merge(merge_id):
 def bulk_action():
     """Bulk approve/reject merges."""
     db = get_db()
+    cur = db.cursor()
     data = request.json
     action = data.get('action')  # 'approve' or 'reject'
     merge_ids = data.get('ids', [])
@@ -440,12 +370,12 @@ def bulk_action():
 
     status = 'approved' if action == 'approve' else 'rejected'
 
-    placeholders = ','.join('?' * len(merge_ids))
-    db.execute(f'''
+    # Use ANY for PostgreSQL array
+    cur.execute('''
         UPDATE merges
-        SET status = ?, reviewed_at = CURRENT_TIMESTAMP
-        WHERE id IN ({placeholders})
-    ''', [status] + merge_ids)
+        SET status = %s, reviewed_at = CURRENT_TIMESTAMP
+        WHERE id = ANY(%s)
+    ''', (status, merge_ids))
     db.commit()
 
     return jsonify({'success': True, 'updated': len(merge_ids)})
@@ -455,6 +385,7 @@ def bulk_action():
 def apply_rule():
     """Apply a rule to all matching merges in a category."""
     db = get_db()
+    cur = db.cursor()
     data = request.json
 
     action = data.get('action')  # 'approve' or 'reject'
@@ -467,35 +398,34 @@ def apply_rule():
     status = 'approved' if action == 'approve' else 'rejected'
 
     # Build query
-    where_clauses = ['status = ?']
+    where_clauses = ['status = %s']
     params = ['pending']
 
     if category:
-        where_clauses.append('category = ?')
+        where_clauses.append('category = %s')
         params.append(category)
 
     if subcategory:
-        where_clauses.append('subcategory = ?')
+        where_clauses.append('subcategory = %s')
         params.append(subcategory)
 
     where_sql = ' AND '.join(where_clauses)
 
     # Count how many will be affected
-    count = db.execute(
-        f'SELECT COUNT(*) FROM merges WHERE {where_sql}', params
-    ).fetchone()[0]
+    cur.execute(f'SELECT COUNT(*) as count FROM merges WHERE {where_sql}', params)
+    count = cur.fetchone()['count']
 
     # Apply the rule
-    db.execute(f'''
+    cur.execute(f'''
         UPDATE merges
-        SET status = ?, reviewed_at = CURRENT_TIMESTAMP, reviewer_notes = 'Bulk rule applied'
+        SET status = %s, reviewed_at = CURRENT_TIMESTAMP, reviewer_notes = 'Bulk rule applied'
         WHERE {where_sql}
     ''', [status] + params)
 
     # Save the rule
-    db.execute('''
+    cur.execute('''
         INSERT INTO review_rules (category, subcategory, action, applied_count)
-        VALUES (?, ?, ?, ?)
+        VALUES (%s, %s, %s, %s)
     ''', (category, subcategory, action, count))
 
     db.commit()
@@ -507,57 +437,90 @@ def apply_rule():
 def get_rules():
     """Get all saved rules."""
     db = get_db()
-    rules = db.execute('''
-        SELECT * FROM review_rules ORDER BY created_at DESC
-    ''').fetchall()
-    return jsonify([dict(row) for row in rules])
+    cur = db.cursor()
+    cur.execute('SELECT * FROM review_rules ORDER BY created_at DESC')
+    return jsonify([dict(row) for row in cur.fetchall()])
 
 
 @app.route('/api/export/approved')
 def export_approved():
-    """Export approved merges as CSV."""
+    """Export approved merges as CSV formatted for merge API."""
     db = get_db()
+    cur = db.cursor()
 
-    merges = db.execute('''
-        SELECT source_id, target_id, confidence, source_address, target_address, category, subcategory
+    cur.execute('''
+        SELECT source_id, target_id, confidence, source_address, target_address,
+               category, subcategory, reviewed_at
         FROM merges WHERE status = 'approved'
-    ''').fetchall()
+        ORDER BY reviewed_at
+    ''')
+    merges = cur.fetchall()
 
-    # Write to temp file
-    export_path = '/tmp/approved_merges.csv'
-    with open(export_path, 'w', newline='', encoding='utf-8') as f:
-        writer = csv.writer(f)
-        writer.writerow(['source_id', 'target_id', 'confidence', 'source_address', 'target_address', 'category', 'subcategory'])
-        for row in merges:
-            writer.writerow(row)
+    # Create CSV in memory
+    output = StringIO()
+    writer = csv.writer(output)
+    writer.writerow(['merge_from_id', 'merge_to_id', 'confidence', 'source_address', 'target_address', 'category', 'subcategory', 'reviewed_at'])
+    for row in merges:
+        writer.writerow([row['source_id'], row['target_id'], row['confidence'],
+                        row['source_address'], row['target_address'],
+                        row['category'], row['subcategory'], row['reviewed_at']])
 
-    return send_file(export_path, as_attachment=True, download_name='approved_merges.csv')
-
-
-@app.cli.command('init-db')
-def init_db_command():
-    """Initialize the database."""
-    init_db()
-    load_merges_if_needed()
-    load_original_sample()
-    print('Database initialized.')
+    output.seek(0)
+    return Response(
+        output.getvalue(),
+        mimetype='text/csv',
+        headers={'Content-Disposition': 'attachment; filename=approved_merges.csv'}
+    )
 
 
-@app.cli.command('reclassify')
-def reclassify_command():
-    """Reclassify all merges."""
+@app.route('/api/export/approved/json')
+def export_approved_json():
+    """Export approved merges as JSON formatted for merge API."""
     db = get_db()
-    merges = db.execute('SELECT id, source_address, target_address FROM merges').fetchall()
+    cur = db.cursor()
 
-    for merge in merges:
-        category, subcategory, desc = classify_merge(merge['source_address'], merge['target_address'])
-        db.execute('''
-            UPDATE merges SET category = ?, subcategory = ?, category_desc = ?
-            WHERE id = ?
-        ''', (category, subcategory, desc, merge['id']))
+    cur.execute('''
+        SELECT source_id as merge_from_id, target_id as merge_to_id
+        FROM merges WHERE status = 'approved'
+        ORDER BY reviewed_at
+    ''')
+    merges = [dict(row) for row in cur.fetchall()]
 
-    db.commit()
-    print(f'Reclassified {len(merges)} merges')
+    return jsonify({
+        'total': len(merges),
+        'merges': merges
+    })
+
+
+@app.route('/api/export/rejected')
+def export_rejected():
+    """Export rejected merges as CSV."""
+    db = get_db()
+    cur = db.cursor()
+
+    cur.execute('''
+        SELECT source_id, target_id, confidence, source_address, target_address,
+               category, subcategory, reviewed_at
+        FROM merges WHERE status = 'rejected'
+        ORDER BY reviewed_at
+    ''')
+    merges = cur.fetchall()
+
+    # Create CSV in memory
+    output = StringIO()
+    writer = csv.writer(output)
+    writer.writerow(['source_id', 'target_id', 'confidence', 'source_address', 'target_address', 'category', 'subcategory', 'reviewed_at'])
+    for row in merges:
+        writer.writerow([row['source_id'], row['target_id'], row['confidence'],
+                        row['source_address'], row['target_address'],
+                        row['category'], row['subcategory'], row['reviewed_at']])
+
+    output.seek(0)
+    return Response(
+        output.getvalue(),
+        mimetype='text/csv',
+        headers={'Content-Disposition': 'attachment; filename=rejected_merges.csv'}
+    )
 
 
 with app.app_context():
