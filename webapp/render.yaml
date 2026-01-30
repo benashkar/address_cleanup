@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: address-merge-review
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app
+    envVars:
+      - key: DATABASE_PATH
+        value: /tmp/review.db
+      - key: PYTHON_VERSION
+        value: 3.11.0

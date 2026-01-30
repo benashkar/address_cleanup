@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Address Merge Review</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: #f5f5f5;
+            color: #333;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        header {
+            background: #2c3e50;
+            color: white;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        header h1 {
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+
+        .stats {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+
+        .stat {
+            background: rgba(255,255,255,0.1);
+            padding: 10px 20px;
+            border-radius: 5px;
+        }
+
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            opacity: 0.8;
+        }
+
+        .filters {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .filters label {
+            font-weight: 500;
+        }
+
+        .filters select, .filters button {
+            padding: 8px 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+
+        .filters button {
+            background: #3498db;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+
+        .filters button:hover {
+            background: #2980b9;
+        }
+
+        .filters button.danger {
+            background: #e74c3c;
+        }
+
+        .filters button.success {
+            background: #27ae60;
+        }
+
+        .merge-card {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 15px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .merge-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .merge-id {
+            font-size: 12px;
+            color: #888;
+        }
+
+        .confidence {
+            background: #27ae60;
+            color: white;
+            padding: 3px 10px;
+            border-radius: 15px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        .comparison {
+            display: grid;
+            grid-template-columns: 1fr 50px 1fr;
+            gap: 15px;
+            align-items: start;
+        }
+
+        .address-box {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            border-left: 4px solid #e74c3c;
+        }
+
+        .address-box.target {
+            border-left-color: #27ae60;
+        }
+
+        .address-box h3 {
+            font-size: 12px;
+            text-transform: uppercase;
+            color: #888;
+            margin-bottom: 10px;
+        }
+
+        .address-box .normalized {
+            font-size: 16px;
+            font-weight: 500;
+            margin-bottom: 10px;
+        }
+
+        .address-box .raw {
+            font-size: 13px;
+            color: #666;
+            background: #fff;
+            padding: 8px;
+            border-radius: 3px;
+            margin-bottom: 8px;
+        }
+
+        .address-box .meta {
+            font-size: 11px;
+            color: #999;
+        }
+
+        .arrow {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            color: #888;
+        }
+
+        .actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #eee;
+        }
+
+        .actions button {
+            padding: 10px 25px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .btn-approve {
+            background: #27ae60;
+            color: white;
+        }
+
+        .btn-approve:hover {
+            background: #219a52;
+        }
+
+        .btn-reject {
+            background: #e74c3c;
+            color: white;
+        }
+
+        .btn-reject:hover {
+            background: #c0392b;
+        }
+
+        .btn-skip {
+            background: #95a5a6;
+            color: white;
+        }
+
+        .checkbox-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .pagination {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .pagination button {
+            padding: 10px 20px;
+            border: 1px solid #ddd;
+            background: white;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        .pagination button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .pagination button:hover:not(:disabled) {
+            background: #f0f0f0;
+        }
+
+        .page-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 50px;
+            color: #888;
+        }
+
+        .diff-highlight {
+            background: #fff3cd;
+            padding: 2px 4px;
+            border-radius: 2px;
+        }
+
+        @media (max-width: 768px) {
+            .comparison {
+                grid-template-columns: 1fr;
+            }
+            .arrow {
+                transform: rotate(90deg);
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="container">
+            <h1>Address Merge Review</h1>
+            <div class="stats" id="stats">
+                <div class="stat">
+                    <div class="stat-value" id="stat-pending">-</div>
+                    <div class="stat-label">Pending</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value" id="stat-approved">-</div>
+                    <div class="stat-label">Approved</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value" id="stat-rejected">-</div>
+                    <div class="stat-label">Rejected</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value" id="stat-total">-</div>
+                    <div class="stat-label">Total</div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <div class="container">
+        <div class="filters">
+            <label>
+                Filter:
+                <select id="status-filter">
+                    <option value="pending">Pending</option>
+                    <option value="approved">Approved</option>
+                    <option value="rejected">Rejected</option>
+                </select>
+            </label>
+            <label>
+                Per page:
+                <select id="per-page">
+                    <option value="10">10</option>
+                    <option value="20" selected>20</option>
+                    <option value="50">50</option>
+                    <option value="100">100</option>
+                </select>
+            </label>
+            <button class="success" onclick="bulkAction('approve')">Approve Selected</button>
+            <button class="danger" onclick="bulkAction('reject')">Reject Selected</button>
+            <button onclick="selectAll()">Select All</button>
+            <button onclick="deselectAll()">Deselect All</button>
+            <a href="/api/export/approved" style="margin-left: auto;">
+                <button>Export Approved CSV</button>
+            </a>
+        </div>
+
+        <div id="merges-container">
+            <div class="loading">Loading...</div>
+        </div>
+
+        <div class="pagination">
+            <button id="prev-btn" onclick="prevPage()">← Previous</button>
+            <div class="page-info">
+                <span>Page <span id="current-page">1</span> of <span id="total-pages">1</span></span>
+            </div>
+            <button id="next-btn" onclick="nextPage()">Next →</button>
+        </div>
+    </div>
+
+    <script>
+        let currentPage = 1;
+        let perPage = 20;
+        let totalPages = 1;
+        let statusFilter = 'pending';
+
+        async function loadStats() {
+            const response = await fetch('/api/stats');
+            const stats = await response.json();
+
+            document.getElementById('stat-pending').textContent = stats.pending.toLocaleString();
+            document.getElementById('stat-approved').textContent = stats.approved.toLocaleString();
+            document.getElementById('stat-rejected').textContent = stats.rejected.toLocaleString();
+            document.getElementById('stat-total').textContent = stats.total.toLocaleString();
+        }
+
+        async function loadMerges() {
+            const container = document.getElementById('merges-container');
+            container.innerHTML = '<div class="loading">Loading...</div>';
+
+            const response = await fetch(`/api/merges?page=${currentPage}&per_page=${perPage}&status=${statusFilter}`);
+            const data = await response.json();
+
+            totalPages = data.total_pages;
+            document.getElementById('current-page').textContent = currentPage;
+            document.getElementById('total-pages').textContent = totalPages;
+            document.getElementById('prev-btn').disabled = currentPage <= 1;
+            document.getElementById('next-btn').disabled = currentPage >= totalPages;
+
+            if (data.merges.length === 0) {
+                container.innerHTML = '<div class="loading">No merges found with this filter.</div>';
+                return;
+            }
+
+            container.innerHTML = data.merges.map(merge => `
+                <div class="merge-card" id="merge-${merge.id}">
+                    <div class="merge-header">
+                        <div class="checkbox-wrapper">
+                            <input type="checkbox" class="merge-checkbox" value="${merge.id}">
+                            <span class="merge-id">#${merge.id}</span>
+                        </div>
+                        <span class="confidence">${(merge.confidence * 100).toFixed(0)}% Match</span>
+                    </div>
+                    <div class="comparison">
+                        <div class="address-box source">
+                            <h3>Source (Delete This)</h3>
+                            <div class="normalized">${escapeHtml(merge.source_address)}</div>
+                            <div class="raw"><strong>Raw:</strong> ${escapeHtml(merge.source_raw || 'N/A')}</div>
+                            <div class="raw"><strong>Original:</strong> ${escapeHtml(merge.source_original || 'N/A')}</div>
+                            <div class="meta">
+                                ID: ${merge.source_id}<br>
+                                Source: ${escapeHtml(merge.source_ext_source || 'Unknown')}
+                            </div>
+                        </div>
+                        <div class="arrow">→</div>
+                        <div class="address-box target">
+                            <h3>Target (Keep This)</h3>
+                            <div class="normalized">${escapeHtml(merge.target_address)}</div>
+                            <div class="raw"><strong>Raw:</strong> ${escapeHtml(merge.target_raw || 'N/A')}</div>
+                            <div class="raw"><strong>Original:</strong> ${escapeHtml(merge.target_original || 'N/A')}</div>
+                            <div class="meta">
+                                ID: ${merge.target_id}<br>
+                                Source: ${escapeHtml(merge.target_ext_source || 'Unknown')}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="actions">
+                        <button class="btn-approve" onclick="approve(${merge.id})">✓ Approve</button>
+                        <button class="btn-reject" onclick="reject(${merge.id})">✗ Reject</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        async function approve(id) {
+            await fetch(`/api/merges/${id}/approve`, { method: 'POST' });
+            document.getElementById(`merge-${id}`).remove();
+            loadStats();
+        }
+
+        async function reject(id) {
+            await fetch(`/api/merges/${id}/reject`, { method: 'POST' });
+            document.getElementById(`merge-${id}`).remove();
+            loadStats();
+        }
+
+        async function bulkAction(action) {
+            const checkboxes = document.querySelectorAll('.merge-checkbox:checked');
+            const ids = Array.from(checkboxes).map(cb => parseInt(cb.value));
+
+            if (ids.length === 0) {
+                alert('No items selected');
+                return;
+            }
+
+            await fetch('/api/merges/bulk', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action, ids })
+            });
+
+            loadMerges();
+            loadStats();
+        }
+
+        function selectAll() {
+            document.querySelectorAll('.merge-checkbox').forEach(cb => cb.checked = true);
+        }
+
+        function deselectAll() {
+            document.querySelectorAll('.merge-checkbox').forEach(cb => cb.checked = false);
+        }
+
+        function prevPage() {
+            if (currentPage > 1) {
+                currentPage--;
+                loadMerges();
+            }
+        }
+
+        function nextPage() {
+            if (currentPage < totalPages) {
+                currentPage++;
+                loadMerges();
+            }
+        }
+
+        document.getElementById('status-filter').addEventListener('change', (e) => {
+            statusFilter = e.target.value;
+            currentPage = 1;
+            loadMerges();
+        });
+
+        document.getElementById('per-page').addEventListener('change', (e) => {
+            perPage = parseInt(e.target.value);
+            currentPage = 1;
+            loadMerges();
+        });
+
+        // Initial load
+        loadStats();
+        loadMerges();
+
+        // Auto-refresh stats every 30 seconds
+        setInterval(loadStats, 30000);
+    </script>
+</body>
+</html>
