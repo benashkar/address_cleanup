@@ -101,6 +101,16 @@ def init_db():
             confidence REAL,
             source_address TEXT,
             target_address TEXT,
+            source_raw TEXT,
+            source_original TEXT,
+            source_unit TEXT,
+            source_unit_type TEXT,
+            source_ext_source TEXT,
+            target_raw TEXT,
+            target_original TEXT,
+            target_unit TEXT,
+            target_unit_type TEXT,
+            target_ext_source TEXT,
             category TEXT,
             subcategory TEXT,
             category_desc TEXT,
@@ -172,6 +182,16 @@ def load_merges_if_needed():
                     float(row['confidence']),
                     row['source_address'],
                     row['target_address'],
+                    row.get('source_raw', ''),
+                    row.get('source_original', ''),
+                    row.get('source_unit', ''),
+                    row.get('source_unit_type', ''),
+                    row.get('source_ext_source', ''),
+                    row.get('target_raw', ''),
+                    row.get('target_original', ''),
+                    row.get('target_unit', ''),
+                    row.get('target_unit_type', ''),
+                    row.get('target_ext_source', ''),
                     category,
                     subcategory,
                     desc
@@ -179,8 +199,11 @@ def load_merges_if_needed():
                 if len(batch) >= 1000:
                     db.executemany('''
                         INSERT INTO merges (source_id, target_id, confidence,
-                            source_address, target_address, category, subcategory, category_desc)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                            source_address, target_address,
+                            source_raw, source_original, source_unit, source_unit_type, source_ext_source,
+                            target_raw, target_original, target_unit, target_unit_type, target_ext_source,
+                            category, subcategory, category_desc)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ''', batch)
                     batch = []
                     if i % 10000 == 0:
@@ -188,8 +211,11 @@ def load_merges_if_needed():
             if batch:
                 db.executemany('''
                     INSERT INTO merges (source_id, target_id, confidence,
-                        source_address, target_address, category, subcategory, category_desc)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        source_address, target_address,
+                        source_raw, source_original, source_unit, source_unit_type, source_ext_source,
+                        target_raw, target_original, target_unit, target_unit_type, target_ext_source,
+                        category, subcategory, category_desc)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ''', batch)
         db.commit()
         final_count = db.execute('SELECT COUNT(*) FROM merges').fetchone()[0]
@@ -330,35 +356,33 @@ def get_merges():
         f'SELECT COUNT(*) FROM merges WHERE {where_sql}', params
     ).fetchone()[0]
 
-    # Get merges with original address data
+    # Get merges (all data is now in the merges table)
     merges = db.execute(f'''
         SELECT
-            m.id,
-            m.source_id,
-            m.target_id,
-            m.confidence,
-            m.source_address,
-            m.target_address,
-            m.category,
-            m.subcategory,
-            m.category_desc,
-            m.status,
-            m.reviewer_notes,
-            os.raw_address as source_raw,
-            os.address as source_original,
-            os.external_source as source_ext_source,
-            os.unit as source_unit,
-            os.unit_type as source_unit_type,
-            ot.raw_address as target_raw,
-            ot.address as target_original,
-            ot.external_source as target_ext_source,
-            ot.unit as target_unit,
-            ot.unit_type as target_unit_type
-        FROM merges m
-        LEFT JOIN original_addresses os ON m.source_id = os.id
-        LEFT JOIN original_addresses ot ON m.target_id = ot.id
+            id,
+            source_id,
+            target_id,
+            confidence,
+            source_address,
+            target_address,
+            category,
+            subcategory,
+            category_desc,
+            status,
+            reviewer_notes,
+            source_raw,
+            source_original,
+            source_ext_source,
+            source_unit,
+            source_unit_type,
+            target_raw,
+            target_original,
+            target_ext_source,
+            target_unit,
+            target_unit_type
+        FROM merges
         WHERE {where_sql}
-        ORDER BY m.id
+        ORDER BY id
         LIMIT ? OFFSET ?
     ''', params + [per_page, offset]).fetchall()
 
@@ -539,7 +563,6 @@ def reclassify_command():
 with app.app_context():
     init_db()
     load_merges_if_needed()
-    load_original_sample()
 
 
 if __name__ == '__main__':
