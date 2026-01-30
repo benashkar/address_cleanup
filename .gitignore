@@ -17,6 +17,9 @@ reports/*.csv
 # Keep summary files in git
 !reports/summary_*.txt
 
+# Keep high confidence merges for webapp deployment
+!reports/high_confidence_merges_*.csv
+
 # Data files (too large for git)
 *.csv
 *.csv.zip
