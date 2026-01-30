@@ -1,0 +1,16 @@
+Address Deduplication Analysis Summary
+==================================================
+
+Analysis Date: 2026-01-30 00:21:14
+Total Addresses Analyzed: 2,582,911
+
+Duplicate Groups Found:
+  - exact: 177,878 groups
+  - fuzzy_street: 541,515 groups
+  - geocode_cluster: 33,019,355 groups
+  - same_building: 180,910 groups
+
+Total Merge Suggestions: 33,806,869
+  - High Confidence (auto-merge candidates): 245,999
+  - Needs Manual Review: 33,560,870
+  - Same Building (not duplicates): 180,910 groups

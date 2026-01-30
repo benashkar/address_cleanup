@@ -11,9 +11,11 @@ venv/
 dist/
 build/
 
-# Reports (generated, can be large)
+# Reports (generated, can be very large - keep locally)
 reports/*.csv
-reports/*.txt
+
+# Keep summary files in git
+!reports/summary_*.txt
 
 # Data files (too large for git)
 *.csv
