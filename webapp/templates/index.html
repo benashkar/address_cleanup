@@ -99,6 +99,101 @@
             background: #27ae60;
         }
 
+        .filters button.warning {
+            background: #f39c12;
+        }
+
+        .category-panel {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .category-panel h2 {
+            font-size: 18px;
+            margin-bottom: 15px;
+            color: #2c3e50;
+        }
+
+        .category-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 15px;
+        }
+
+        .category-card {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+            padding: 15px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .category-card:hover {
+            border-color: #3498db;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .category-card.selected {
+            border-color: #3498db;
+            background: #ebf5fb;
+        }
+
+        .category-card h3 {
+            font-size: 14px;
+            margin-bottom: 5px;
+            color: #2c3e50;
+        }
+
+        .category-card .desc {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 10px;
+        }
+
+        .category-card .counts {
+            display: flex;
+            gap: 15px;
+            font-size: 12px;
+        }
+
+        .category-card .counts span {
+            padding: 2px 8px;
+            border-radius: 10px;
+        }
+
+        .counts .pending { background: #fff3cd; color: #856404; }
+        .counts .approved { background: #d4edda; color: #155724; }
+        .counts .rejected { background: #f8d7da; color: #721c24; }
+
+        .category-actions {
+            margin-top: 15px;
+            padding-top: 10px;
+            border-top: 1px solid #ddd;
+            display: flex;
+            gap: 10px;
+        }
+
+        .category-actions button {
+            padding: 5px 12px;
+            font-size: 12px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .category-actions .approve-all {
+            background: #27ae60;
+            color: white;
+        }
+
+        .category-actions .reject-all {
+            background: #e74c3c;
+            color: white;
+        }
+
         .merge-card {
             background: white;
             border-radius: 8px;
@@ -121,6 +216,11 @@
             color: #888;
         }
 
+        .merge-badges {
+            display: flex;
+            gap: 8px;
+        }
+
         .confidence {
             background: #27ae60;
             color: white;
@@ -128,6 +228,26 @@
             border-radius: 15px;
             font-size: 12px;
             font-weight: bold;
+        }
+
+        .category-badge {
+            background: #3498db;
+            color: white;
+            padding: 3px 10px;
+            border-radius: 15px;
+            font-size: 12px;
+        }
+
+        .category-badge.position_diff {
+            background: #e74c3c;
+        }
+
+        .category-badge.exact {
+            background: #27ae60;
+        }
+
+        .category-badge.incomplete {
+            background: #f39c12;
         }
 
         .comparison {
@@ -218,11 +338,6 @@
             background: #c0392b;
         }
 
-        .btn-skip {
-            background: #95a5a6;
-            color: white;
-        }
-
         .checkbox-wrapper {
             display: flex;
             align-items: center;
@@ -265,10 +380,51 @@
             color: #888;
         }
 
-        .diff-highlight {
-            background: #fff3cd;
-            padding: 2px 4px;
-            border-radius: 2px;
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            max-width: 500px;
+            width: 90%;
+        }
+
+        .modal-content h2 {
+            margin-bottom: 15px;
+        }
+
+        .modal-content p {
+            margin-bottom: 20px;
+            color: #666;
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+        }
+
+        .modal-actions button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
         }
 
         @media (max-width: 768px) {
@@ -307,9 +463,20 @@
     </header>
 
     <div class="container">
+        <!-- Category Panel -->
+        <div class="category-panel">
+            <h2>Filter by Category</h2>
+            <p style="font-size: 13px; color: #666; margin-bottom: 15px;">
+                Review a sample from each category, then apply your decision to all similar records.
+            </p>
+            <div class="category-grid" id="category-grid">
+                <div class="loading">Loading categories...</div>
+            </div>
+        </div>
+
         <div class="filters">
             <label>
-                Filter:
+                Status:
                 <select id="status-filter">
                     <option value="pending">Pending</option>
                     <option value="approved">Approved</option>
@@ -329,9 +496,15 @@
             <button class="danger" onclick="bulkAction('reject')">Reject Selected</button>
             <button onclick="selectAll()">Select All</button>
             <button onclick="deselectAll()">Deselect All</button>
+            <button onclick="clearFilters()" style="background: #95a5a6;">Clear Filters</button>
             <a href="/api/export/approved" style="margin-left: auto;">
                 <button>Export Approved CSV</button>
             </a>
+        </div>
+
+        <div id="active-filter" style="display: none; background: #ebf5fb; padding: 10px 15px; border-radius: 5px; margin-bottom: 15px;">
+            <strong>Active Filter:</strong> <span id="filter-text"></span>
+            <button onclick="clearFilters()" style="margin-left: 10px; padding: 3px 10px; font-size: 12px;">Clear</button>
         </div>
 
         <div id="merges-container">
@@ -347,11 +520,26 @@
         </div>
     </div>
 
+    <!-- Confirmation Modal -->
+    <div class="modal" id="confirm-modal">
+        <div class="modal-content">
+            <h2 id="modal-title">Confirm Action</h2>
+            <p id="modal-message">Are you sure?</p>
+            <div class="modal-actions">
+                <button onclick="closeModal()" style="background: #95a5a6; color: white;">Cancel</button>
+                <button id="modal-confirm" style="background: #27ae60; color: white;">Confirm</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         let currentPage = 1;
         let perPage = 20;
         let totalPages = 1;
         let statusFilter = 'pending';
+        let categoryFilter = '';
+        let subcategoryFilter = '';
+        let categories = [];
 
         async function loadStats() {
             const response = await fetch('/api/stats');
@@ -363,11 +551,113 @@
             document.getElementById('stat-total').textContent = stats.total.toLocaleString();
         }
 
+        async function loadCategories() {
+            const response = await fetch('/api/categories');
+            categories = await response.json();
+
+            const grid = document.getElementById('category-grid');
+
+            if (categories.length === 0) {
+                grid.innerHTML = '<p>No categories found.</p>';
+                return;
+            }
+
+            grid.innerHTML = categories.map(cat => `
+                <div class="category-card ${categoryFilter === cat.category && subcategoryFilter === cat.subcategory ? 'selected' : ''}"
+                     onclick="selectCategory('${cat.category}', '${cat.subcategory}')"
+                     data-category="${cat.category}" data-subcategory="${cat.subcategory}">
+                    <h3>${formatCategory(cat.category)} - ${formatCategory(cat.subcategory)}</h3>
+                    <div class="desc">${escapeHtml(cat.category_desc || '')}</div>
+                    <div class="counts">
+                        <span class="pending">${cat.pending.toLocaleString()} pending</span>
+                        <span class="approved">${cat.approved.toLocaleString()} approved</span>
+                        <span class="rejected">${cat.rejected.toLocaleString()} rejected</span>
+                    </div>
+                    <div class="category-actions">
+                        <button class="approve-all" onclick="event.stopPropagation(); applyRuleToCategory('${cat.category}', '${cat.subcategory}', 'approve', ${cat.pending})">
+                            Approve All ${cat.pending.toLocaleString()}
+                        </button>
+                        <button class="reject-all" onclick="event.stopPropagation(); applyRuleToCategory('${cat.category}', '${cat.subcategory}', 'reject', ${cat.pending})">
+                            Reject All
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function formatCategory(str) {
+            if (!str) return '';
+            return str.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+        }
+
+        function selectCategory(category, subcategory) {
+            categoryFilter = category;
+            subcategoryFilter = subcategory;
+            currentPage = 1;
+
+            // Update UI
+            document.querySelectorAll('.category-card').forEach(card => {
+                card.classList.remove('selected');
+                if (card.dataset.category === category && card.dataset.subcategory === subcategory) {
+                    card.classList.add('selected');
+                }
+            });
+
+            // Show active filter
+            document.getElementById('active-filter').style.display = 'block';
+            document.getElementById('filter-text').textContent = `${formatCategory(category)} - ${formatCategory(subcategory)}`;
+
+            loadMerges();
+        }
+
+        function clearFilters() {
+            categoryFilter = '';
+            subcategoryFilter = '';
+            currentPage = 1;
+
+            document.querySelectorAll('.category-card').forEach(card => {
+                card.classList.remove('selected');
+            });
+
+            document.getElementById('active-filter').style.display = 'none';
+            loadMerges();
+        }
+
+        function applyRuleToCategory(category, subcategory, action, count) {
+            const actionText = action === 'approve' ? 'APPROVE' : 'REJECT';
+            document.getElementById('modal-title').textContent = `${actionText} All in Category`;
+            document.getElementById('modal-message').textContent =
+                `This will ${action} all ${count.toLocaleString()} pending merges in "${formatCategory(category)} - ${formatCategory(subcategory)}". This cannot be undone. Continue?`;
+
+            document.getElementById('modal-confirm').onclick = async () => {
+                closeModal();
+                await fetch('/api/rules/apply', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action, category, subcategory })
+                });
+                loadStats();
+                loadCategories();
+                loadMerges();
+            };
+
+            document.getElementById('modal-confirm').style.background = action === 'approve' ? '#27ae60' : '#e74c3c';
+            document.getElementById('confirm-modal').classList.add('active');
+        }
+
+        function closeModal() {
+            document.getElementById('confirm-modal').classList.remove('active');
+        }
+
         async function loadMerges() {
             const container = document.getElementById('merges-container');
             container.innerHTML = '<div class="loading">Loading...</div>';
 
-            const response = await fetch(`/api/merges?page=${currentPage}&per_page=${perPage}&status=${statusFilter}`);
+            let url = `/api/merges?page=${currentPage}&per_page=${perPage}&status=${statusFilter}`;
+            if (categoryFilter) url += `&category=${encodeURIComponent(categoryFilter)}`;
+            if (subcategoryFilter) url += `&subcategory=${encodeURIComponent(subcategoryFilter)}`;
+
+            const response = await fetch(url);
             const data = await response.json();
 
             totalPages = data.total_pages;
@@ -388,7 +678,13 @@
                             <input type="checkbox" class="merge-checkbox" value="${merge.id}">
                             <span class="merge-id">#${merge.id}</span>
                         </div>
-                        <span class="confidence">${(merge.confidence * 100).toFixed(0)}% Match</span>
+                        <div class="merge-badges">
+                            <span class="category-badge ${merge.category}">${formatCategory(merge.category)}</span>
+                            <span class="confidence">${(merge.confidence * 100).toFixed(0)}%</span>
+                        </div>
+                    </div>
+                    <div style="background: #f0f0f0; padding: 8px 12px; border-radius: 4px; margin-bottom: 15px; font-size: 13px;">
+                        <strong>Why flagged:</strong> ${escapeHtml(merge.category_desc || 'Similar addresses')}
                     </div>
                     <div class="comparison">
                         <div class="address-box source">
@@ -414,8 +710,8 @@
                         </div>
                     </div>
                     <div class="actions">
-                        <button class="btn-approve" onclick="approve(${merge.id})">✓ Approve</button>
-                        <button class="btn-reject" onclick="reject(${merge.id})">✗ Reject</button>
+                        <button class="btn-approve" onclick="approve(${merge.id})">✓ Approve Merge</button>
+                        <button class="btn-reject" onclick="reject(${merge.id})">✗ Reject (Not Duplicate)</button>
                     </div>
                 </div>
             `).join('');
@@ -432,12 +728,14 @@
             await fetch(`/api/merges/${id}/approve`, { method: 'POST' });
             document.getElementById(`merge-${id}`).remove();
             loadStats();
+            loadCategories();
         }
 
         async function reject(id) {
             await fetch(`/api/merges/${id}/reject`, { method: 'POST' });
             document.getElementById(`merge-${id}`).remove();
             loadStats();
+            loadCategories();
         }
 
         async function bulkAction(action) {
@@ -457,6 +755,7 @@
 
             loadMerges();
             loadStats();
+            loadCategories();
         }
 
         function selectAll() {
@@ -493,12 +792,23 @@
             loadMerges();
         });
 
+        // Close modal on outside click
+        document.getElementById('confirm-modal').addEventListener('click', (e) => {
+            if (e.target.id === 'confirm-modal') {
+                closeModal();
+            }
+        });
+
         // Initial load
         loadStats();
+        loadCategories();
         loadMerges();
 
         // Auto-refresh stats every 30 seconds
-        setInterval(loadStats, 30000);
+        setInterval(() => {
+            loadStats();
+            loadCategories();
+        }, 30000);
     </script>
 </body>
 </html>
