@@ -281,6 +281,17 @@
             margin-bottom: 10px;
         }
 
+        .address-box .unit-info {
+            font-size: 14px;
+            font-weight: 600;
+            color: #8e44ad;
+            background: #f5eef8;
+            padding: 6px 10px;
+            border-radius: 4px;
+            margin-bottom: 10px;
+            border-left: 3px solid #8e44ad;
+        }
+
         .address-box .raw {
             font-size: 13px;
             color: #666;
@@ -690,6 +701,7 @@
                         <div class="address-box source">
                             <h3>Source (Delete This)</h3>
                             <div class="normalized">${escapeHtml(merge.source_address)}</div>
+                            <div class="unit-info"><strong>Unit:</strong> ${escapeHtml(merge.source_unit || 'N/A')} &nbsp;|&nbsp; <strong>Unit Type:</strong> ${escapeHtml(merge.source_unit_type || 'N/A')}</div>
                             <div class="raw"><strong>Raw:</strong> ${escapeHtml(merge.source_raw || 'N/A')}</div>
                             <div class="raw"><strong>Original:</strong> ${escapeHtml(merge.source_original || 'N/A')}</div>
                             <div class="meta">
@@ -701,6 +713,7 @@
                         <div class="address-box target">
                             <h3>Target (Keep This)</h3>
                             <div class="normalized">${escapeHtml(merge.target_address)}</div>
+                            <div class="unit-info"><strong>Unit:</strong> ${escapeHtml(merge.target_unit || 'N/A')} &nbsp;|&nbsp; <strong>Unit Type:</strong> ${escapeHtml(merge.target_unit_type || 'N/A')}</div>
                             <div class="raw"><strong>Raw:</strong> ${escapeHtml(merge.target_raw || 'N/A')}</div>
                             <div class="raw"><strong>Original:</strong> ${escapeHtml(merge.target_original || 'N/A')}</div>
                             <div class="meta">

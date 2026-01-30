@@ -347,9 +347,13 @@ def get_merges():
             os.raw_address as source_raw,
             os.address as source_original,
             os.external_source as source_ext_source,
+            os.unit as source_unit,
+            os.unit_type as source_unit_type,
             ot.raw_address as target_raw,
             ot.address as target_original,
-            ot.external_source as target_ext_source
+            ot.external_source as target_ext_source,
+            ot.unit as target_unit,
+            ot.unit_type as target_unit_type
         FROM merges m
         LEFT JOIN original_addresses os ON m.source_id = os.id
         LEFT JOIN original_addresses ot ON m.target_id = ot.id
