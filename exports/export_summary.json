@@ -1,0 +1,14 @@
+{
+  "exported_at": "2026-01-30T12:03:09.777210",
+  "stats": {
+    "approved": 1,
+    "pending": 245997,
+    "rejected": 1,
+    "total": 245999
+  },
+  "files": {
+    "approved_csv": "approved_merges_20260130_120308.csv",
+    "approved_json": "approved_merges_20260130_120308.json",
+    "rejected_csv": "rejected_merges_20260130_120308.csv"
+  }
+}

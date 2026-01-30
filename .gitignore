@@ -20,6 +20,10 @@ reports/*.csv
 # Keep high confidence merges for webapp deployment
 !reports/high_confidence_merges_*.csv
 
+# Keep exports (review decisions)
+!exports/*.csv
+!exports/*.json
+
 # Data files (too large for git)
 *.csv
 *.csv.zip
