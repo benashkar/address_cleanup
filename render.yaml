@@ -2,6 +2,7 @@ services:
   - type: web
     name: address-merge-review
     env: python
+    region: ohio
     rootDir: webapp
     buildCommand: pip install -r requirements.txt
     startCommand: gunicorn app:app
